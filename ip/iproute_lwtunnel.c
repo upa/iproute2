@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <linux/if_ether.h>
 #include <linux/ila.h>
 #include <linux/lwtunnel.h>
 #include <linux/mpls_iptunnel.h>
@@ -178,6 +179,8 @@ static const char *seg6_action_names[SEG6_LOCAL_ACTION_MAX + 1] = {
 	[SEG6_LOCAL_ACTION_END_AS]		= "End.AS",
 	[SEG6_LOCAL_ACTION_END_AM]		= "End.AM",
 	[SEG6_LOCAL_ACTION_END_BPF]		= "End.BPF",
+	[SEG6_LOCAL_ACTION_END_AM_E]		= "End.AM.E",
+	[SEG6_LOCAL_ACTION_END_AM_I_T]		= "End.AM.I.T",
 };
 
 static const char *format_action_type(int action)
@@ -271,6 +274,15 @@ static void print_encap_seg6local(FILE *fp, struct rtattr *encap)
 
 		print_string(PRINT_ANY, "oif",
 			     "oif %s ", ll_index_to_name(oif));
+	}
+
+	if (tb[SEG6_LOCAL_MAC]) {
+		__u8 mac[ETH_ALEN];
+		char buf[32];
+		memcpy(mac, RTA_DATA(tb[SEG6_LOCAL_MAC]), ETH_ALEN);
+		snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
+			 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+		print_string(PRINT_ANY, "mac", "mac %s ", buf);
 	}
 
 	if (tb[SEG6_LOCAL_BPF])
@@ -686,6 +698,17 @@ static int parse_encap_seg6local(struct rtattr *rta, size_t len, int *argcp,
 			if (!oif)
 				exit(nodev(*argv));
 			ret = rta_addattr32(rta, len, SEG6_LOCAL_OIF, oif);
+		} else if (strcmp(*argv, "mac") == 0) {
+                        char macbuf[32];
+                        int maclen;
+
+                        NEXT_ARG();
+                        maclen = ll_addr_a2n(macbuf, sizeof(macbuf), *argv);
+			if (maclen < 0)
+				ret = maclen;
+			else
+				ret = rta_addattr_l(rta, len, SEG6_LOCAL_MAC,
+						    macbuf, maclen);
 		} else if (strcmp(*argv, "srh") == 0) {
 			NEXT_ARG();
 			if (srh_ok++)
