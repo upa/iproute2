@@ -206,6 +206,36 @@ static int read_action_type(const char *name)
 	return SEG6_LOCAL_ACTION_UNSPEC;
 }
 
+static const char *seg6_endflavor_names[SEG6_LOCAL_ENDFLAVOR_MAX + 1] = {
+	[SEG6_LOCAL_ENDFLAVOR_NONE]		= "none",
+	[SEG6_LOCAL_ENDFLAVOR_PSP]		= "psp",
+	[SEG6_LOCAL_ENDFLAVOR_USP]		= "usp",
+	[SEG6_LOCAL_ENDFLAVOR_USD]		= "usd",
+};
+
+static const char *format_endflavor_type(int flavor)
+{
+	if (flavor < 0 || flavor > SEG6_LOCAL_ENDFLAVOR_MAX)
+		return "<invalid>";
+
+	return seg6_endflavor_names[flavor] ?: "<unknown>";
+}
+
+static int read_endflavor_type(const char *name)
+{
+	int i;
+
+	for (i = 0; i < SEG6_LOCAL_ENDFLAVOR_MAX + 1; i++) {
+		if (!seg6_endflavor_names[i])
+			continue;
+
+		if (strcmp(seg6_endflavor_names[i], name) == 0)
+			return i;
+	}
+
+	return -1;
+}
+
 static void print_encap_bpf_prog(FILE *fp, struct rtattr *encap,
 				 const char *str)
 {
@@ -231,6 +261,7 @@ static void print_encap_seg6local(FILE *fp, struct rtattr *encap)
 {
 	struct rtattr *tb[SEG6_LOCAL_MAX + 1];
 	int action;
+	__u8 endflavor;
 
 	parse_rtattr_nested(tb, SEG6_LOCAL_MAX, encap);
 
@@ -283,6 +314,13 @@ static void print_encap_seg6local(FILE *fp, struct rtattr *encap)
 		snprintf(buf, sizeof(buf), "%02x:%02x:%02x:%02x:%02x:%02x",
 			 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 		print_string(PRINT_ANY, "mac", "mac %s ", buf);
+	}
+
+	if (tb[SEG6_LOCAL_ENDFLAVOR]) {
+		endflavor = rta_getattr_u8(tb[SEG6_LOCAL_ENDFLAVOR]);
+		print_string(PRINT_ANY, "endflaovr",
+			     "endflavor %s ",
+			     format_endflavor_type(endflavor));
 	}
 
 	if (tb[SEG6_LOCAL_BPF])
@@ -643,7 +681,9 @@ static int parse_encap_seg6local(struct rtattr *rta, size_t len, int *argcp,
 {
 	int segs_ok = 0, hmac_ok = 0, table_ok = 0, nh4_ok = 0, nh6_ok = 0;
 	int iif_ok = 0, oif_ok = 0, action_ok = 0, srh_ok = 0, bpf_ok = 0;
+	int endflavor_ok = 0;
 	__u32 action = 0, table, iif, oif;
+	int endflavor = 0;
 	struct ipv6_sr_hdr *srh;
 	char **argv = *argvp;
 	int argc = *argcp;
@@ -701,7 +741,6 @@ static int parse_encap_seg6local(struct rtattr *rta, size_t len, int *argcp,
 		} else if (strcmp(*argv, "mac") == 0) {
                         char macbuf[32];
                         int maclen;
-
                         NEXT_ARG();
                         maclen = ll_addr_a2n(macbuf, sizeof(macbuf), *argv);
 			if (maclen < 0)
@@ -709,6 +748,15 @@ static int parse_encap_seg6local(struct rtattr *rta, size_t len, int *argcp,
 			else
 				ret = rta_addattr_l(rta, len, SEG6_LOCAL_MAC,
 						    macbuf, maclen);
+		} else if (strcmp(*argv, "endflavor") == 0) {
+			NEXT_ARG();
+			if (endflavor_ok++)
+				duparg2("endflavor", *argv);
+			endflavor = read_endflavor_type(*argv);
+			if (endflavor < 0)
+				invarg("invalid \"endflavor\"", *argv);
+			ret = rta_addattr8(rta, len, SEG6_LOCAL_ENDFLAVOR,
+					   endflavor);
 		} else if (strcmp(*argv, "srh") == 0) {
 			NEXT_ARG();
 			if (srh_ok++)
