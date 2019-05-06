@@ -181,6 +181,8 @@ static const char *seg6_action_names[SEG6_LOCAL_ACTION_MAX + 1] = {
 	[SEG6_LOCAL_ACTION_END_BPF]		= "End.BPF",
 	[SEG6_LOCAL_ACTION_END_AM_E]		= "End.AM.E",
 	[SEG6_LOCAL_ACTION_END_AM_I_T]		= "End.AM.I.T",
+	[SEG6_LOCAL_ACTION_END_AF4_E]		= "End.AF4.E",
+	[SEG6_LOCAL_ACTION_END_AF4_I_T]		= "End.AF4.I.T",
 };
 
 static const char *format_action_type(int action)
