@@ -183,6 +183,8 @@ static const char *seg6_action_names[SEG6_LOCAL_ACTION_MAX + 1] = {
 	[SEG6_LOCAL_ACTION_END_AM_I_T]		= "End.AM.I.T",
 	[SEG6_LOCAL_ACTION_END_AF4_E]		= "End.AF4.E",
 	[SEG6_LOCAL_ACTION_END_AF4_I_T]		= "End.AF4.I.T",
+	[SEG6_LOCAL_ACTION_END_AC_E]		= "End.AC.E",
+	[SEG6_LOCAL_ACTION_END_AC_I_T]		= "End.AC.I.T",
 };
 
 static const char *format_action_type(int action)
@@ -323,6 +325,11 @@ static void print_encap_seg6local(FILE *fp, struct rtattr *encap)
 		print_string(PRINT_ANY, "endflaovr",
 			     "endflavor %s ",
 			     format_endflavor_type(endflavor));
+	}
+
+	if (tb[SEG6_LOCAL_ARGMASK]) {
+		print_string(PRINT_ANY, "argmask",
+			     "argmask %s ", rt_addr_n2a_rta(AF_INET6, tb[SEG6_LOCAL_ARGMASK]));
 	}
 
 	if (tb[SEG6_LOCAL_BPF])
@@ -683,7 +690,7 @@ static int parse_encap_seg6local(struct rtattr *rta, size_t len, int *argcp,
 {
 	int segs_ok = 0, hmac_ok = 0, table_ok = 0, nh4_ok = 0, nh6_ok = 0;
 	int iif_ok = 0, oif_ok = 0, action_ok = 0, srh_ok = 0, bpf_ok = 0;
-	int endflavor_ok = 0;
+	int endflavor_ok = 0, argmask_ok = 0;
 	__u32 action = 0, table, iif, oif;
 	int endflavor = 0;
 	struct ipv6_sr_hdr *srh;
@@ -759,6 +766,13 @@ static int parse_encap_seg6local(struct rtattr *rta, size_t len, int *argcp,
 				invarg("invalid \"endflavor\"", *argv);
 			ret = rta_addattr8(rta, len, SEG6_LOCAL_ENDFLAVOR,
 					   endflavor);
+		} else if (strcmp(*argv, "argmask") == 0) {
+			NEXT_ARG();
+			if (argmask_ok++)
+				duparg2("argmask", *argv);
+			get_addr(&addr, *argv, AF_INET6);
+			ret = rta_addattr_l(rta, len, SEG6_LOCAL_ARGMASK,
+					    &addr.data, addr.bytelen);
 		} else if (strcmp(*argv, "srh") == 0) {
 			NEXT_ARG();
 			if (srh_ok++)
