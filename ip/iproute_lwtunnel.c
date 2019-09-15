@@ -275,6 +275,7 @@ static void print_encap_seg6local(FILE *fp, struct rtattr *encap)
 
 	if (tb[SEG6_LOCAL_BPF])
 		print_encap_bpf_prog(fp, tb[SEG6_LOCAL_BPF], "endpoint");
+
 }
 
 static void print_encap_mpls(FILE *fp, struct rtattr *encap)
