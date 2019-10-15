@@ -203,6 +203,36 @@ static int read_action_type(const char *name)
 	return SEG6_LOCAL_ACTION_UNSPEC;
 }
 
+static const char *seg6_endflavour_names[SEG6_LOCAL_ENDFLAVOUR_MAX + 1] = {
+	[SEG6_LOCAL_ENDFLAVOUR_NONE]	= "none",
+	[SEG6_LOCAL_ENDFLAVOUR_PSP]	= "psp",
+	[SEG6_LOCAL_ENDFLAVOUR_USP]	= "usp",
+	[SEG6_LOCAL_ENDFLAVOUR_USD]	= "usd",
+};
+
+static const char *format_endflavour_type(int flavour)
+{
+	if (flavour < 0 || flavour > SEG6_LOCAL_ENDFLAVOUR_MAX)
+		return "<invalid>";
+
+	return seg6_endflavour_names[flavour] ?: "<unknown>";
+}
+
+static int read_endflavour_type(const char *name)
+{
+	int i;
+
+	for (i = 0; i < SEG6_LOCAL_ENDFLAVOUR_MAX + 1; i++) {
+		if (!seg6_endflavour_names[i])
+			continue;
+
+		if (strcmp(seg6_endflavour_names[i], name) == 0)
+			return i;
+	}
+
+	return -1;
+}
+
 static void print_encap_bpf_prog(FILE *fp, struct rtattr *encap,
 				 const char *str)
 {
@@ -275,6 +305,14 @@ static void print_encap_seg6local(FILE *fp, struct rtattr *encap)
 
 	if (tb[SEG6_LOCAL_BPF])
 		print_encap_bpf_prog(fp, tb[SEG6_LOCAL_BPF], "endpoint");
+
+	if (tb[SEG6_LOCAL_ENDFLAVOUR]) {
+		int flavour;
+		flavour = rta_getattr_u8(tb[SEG6_LOCAL_ENDFLAVOUR]);
+		print_string(PRINT_ANY, "endflavour",
+			     "endflavour %s ",
+			     format_endflavour_type(flavour));
+	}
 }
 
 static void print_encap_mpls(FILE *fp, struct rtattr *encap)
@@ -631,6 +669,7 @@ static int parse_encap_seg6local(struct rtattr *rta, size_t len, int *argcp,
 {
 	int segs_ok = 0, hmac_ok = 0, table_ok = 0, nh4_ok = 0, nh6_ok = 0;
 	int iif_ok = 0, oif_ok = 0, action_ok = 0, srh_ok = 0, bpf_ok = 0;
+	int endflavour_ok = 0;
 	__u32 action = 0, table, iif, oif;
 	struct ipv6_sr_hdr *srh;
 	char **argv = *argvp;
@@ -638,6 +677,7 @@ static int parse_encap_seg6local(struct rtattr *rta, size_t len, int *argcp,
 	char segbuf[1024];
 	inet_prefix addr;
 	__u32 hmac = 0;
+	__u8 endflavour = 0;
 	int ret = 0;
 
 	while (argc > 0) {
@@ -717,6 +757,15 @@ static int parse_encap_seg6local(struct rtattr *rta, size_t len, int *argcp,
 			if (lwt_parse_bpf(rta, len, &argc, &argv, SEG6_LOCAL_BPF,
 			    BPF_PROG_TYPE_LWT_SEG6LOCAL) < 0)
 				exit(-1);
+		} else if (strcmp(*argv, "endflavour") == 0) {
+			NEXT_ARG();
+			if (endflavour_ok++)
+				duparg2("endflavour", *argv);
+			endflavour = read_endflavour_type(*argv);
+			if (endflavour < 0)
+				invarg("invalid \"endflavour\"", *argv);
+			ret = rta_addattr8(rta, len, SEG6_LOCAL_ENDFLAVOUR,
+					   endflavour);
 		} else {
 			break;
 		}
@@ -738,6 +787,13 @@ static int parse_encap_seg6local(struct rtattr *rta, size_t len, int *argcp,
 		srhlen = (srh->hdrlen + 1) << 3;
 		ret = rta_addattr_l(rta, len, SEG6_LOCAL_SRH, srh, srhlen);
 		free(srh);
+	}
+
+	if ((action == SEG6_LOCAL_ACTION_END ||
+	     action == SEG6_LOCAL_ACTION_END_X ||
+	     action == SEG6_LOCAL_ACTION_END_T) && !endflavour_ok) {
+		ret = rta_addattr8(rta, len, SEG6_LOCAL_ENDFLAVOUR,
+				   SEG6_LOCAL_ENDFLAVOUR_NONE);
 	}
 
 	*argcp = argc + 1;
