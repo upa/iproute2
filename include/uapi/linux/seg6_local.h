@@ -77,6 +77,7 @@ enum {
 
 	/* custom timestamp action */
 	SEG6_LOCAL_ACTION_END_XTS	= 16,
+	SEG6_LOCAL_ACTION_END_XTS2	= 17,
 
 	__SEG6_LOCAL_ACTION_MAX,
 };
